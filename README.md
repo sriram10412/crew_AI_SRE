@@ -21,13 +21,16 @@ Fetches Logs from Kubernetes.
 Analyzes patterns (Stack traces vs. Silence).
 Decides on action: Restart Pod (for stuck processes) or Escalate/Alert (for code bugs).
 Local LLM (Ollama): A 4B parameter model (e.g., gemma3:4b) running locally or remotely, providing the reasoning capabilities without sending data to the cloud.
+
 Verify prmoetheus connectivity
 kubectl run prom-test --image=curlimages/curl -n sre-crew -it --restart=Never --rm -- \
 curl -v http://prometheus-operated.observability.svc.cluster.local:9090/-/ready
+
 Run a temporary curl pod to test LLM
 kubectl run curl-test --image=curlimages/curl -n sre-crew -it --restart=Never --rm -- \
   curl -X POST http://ollama.ollama.svc.cluster.local:11434/api/generate \
   -d '{"model": "gemma3:4b", "prompt": "Define CrewAI in 5 words", "stream": false}'
+  
 Deployment Guide
 Step 1: Deploy Observability & App
 # Deploy the Target App
