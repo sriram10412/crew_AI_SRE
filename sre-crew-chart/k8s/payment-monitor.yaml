@@ -1,0 +1,19 @@
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: payment-service-monitor
+  namespace: default 
+  labels:
+    release: kube-prom-stack       # Change this based on your release name
+spec:
+  jobLabel: app
+  selector:
+    matchLabels:
+      app: payment-service
+  namespaceSelector:
+    matchNames:
+      - default
+  endpoints:
+  - port: metrics
+    path: /metrics
+    interval: 15s

@@ -1,0 +1,53 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ .Chart.Name }}
+  labels:
+    app: {{ .Chart.Name }}
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: {{ .Chart.Name }}
+  template:
+    metadata:
+      labels:
+        app: {{ .Chart.Name }}
+    spec:
+      serviceAccountName: {{ .Values.serviceAccount.name }}
+      containers:
+        - name: {{ .Chart.Name }}
+          image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
+          imagePullPolicy: Always
+          command: ["/bin/sh", "-c"]
+          args:
+            - |
+              echo "🔧 Installing missing dependencies..."
+              pip install fastapi uvicorn litellm
+              echo "✅ Starting Hotfixed App..."
+              python src/main.py
+          env:
+            - name: PROMETHEUS_URL
+              value: {{ .Values.env.prometheusUrl | quote }}
+            - name: OPENAI_API_BASE
+              value: {{ .Values.env.openaiApiBase | quote }}
+            - name: OPENAI_BASE_URL
+              value: {{ .Values.env.openaiApiBase | quote }}
+            - name: OPENAI_API_KEY
+              value: {{ .Values.env.openaiApiKey | quote }}
+            - name: OPENAI_MODEL_NAME
+              value: {{ .Values.env.openaiModel | quote }}
+          volumeMounts:
+            - name: slo-config-volume
+              mountPath: /app/slos.yaml
+              subPath: slos.yaml
+            - name: hotfix-code-volume
+              mountPath: /app/src/main.py
+              subPath: main.py
+      volumes:
+        - name: slo-config-volume
+          configMap:
+            name: {{ .Chart.Name }}-config
+        - name: hotfix-code-volume
+          configMap:
+            name: {{ .Chart.Name }}-hotfix-code

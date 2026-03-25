@@ -1,0 +1,88 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ .Chart.Name }}-hotfix-code
+  labels:
+    app: {{ .Chart.Name }}
+data:
+  main.py: |
+    import time
+    import schedule
+    import yaml
+    import sys
+    from crewai import Crew
+    from agents import get_monitor_agent, get_investigator_agent, get_slo_agent
+    from tasks import SRETasks
+
+    # Load Config
+    try:
+        with open("slos.yaml", 'r') as stream:
+            SLO_CONFIG = yaml.safe_load(stream)
+    except Exception:
+        SLO_CONFIG = {}
+
+    tasks = SRETasks()
+
+    def safe_kickoff(crew):
+        """Helper to run crew without crashing the pod"""
+        try:
+            return crew.kickoff()
+        except Exception as e:
+            print(f"⚠️ [WARNING] LLM Call Failed: {e}")
+            return None
+
+    def run_monitor_cycle():
+        print("\n--- 🔍 Starting Monitor Cycle ---")
+        try:
+            monitor_agent = get_monitor_agent()
+            monitor_task = tasks.monitor_health_task(monitor_agent)
+            crew = Crew(agents=[monitor_agent], tasks=[monitor_task], verbose=False)
+            
+            # SAFE EXECUTION
+            result = safe_kickoff(crew)
+            
+            if not result:
+                print("Skipping cycle due to LLM failure.")
+                return
+
+            output = str(result).strip()
+            print(f"Monitor Output: {output}")
+
+            if "ANOMALY" in output:
+                trigger_investigation(output)
+        except Exception as e:
+            print(f"❌ [ERROR] Monitor Cycle Crashed: {e}")
+
+    def trigger_investigation(issue_context):
+        print("\n--- 🚨 Anomaly Detected! Triggering Investigator ---")
+        try:
+            investigator_agent = get_investigator_agent()
+            investigation_task = tasks.investigate_issue_task(
+                investigator_agent, issue_context
+            )
+            crew = Crew(agents=[investigator_agent], tasks=[investigation_task])
+            safe_kickoff(crew)
+        except Exception as e:
+            print(f"❌ [ERROR] Investigation Crashed: {e}")
+
+    def run_slo_audit():
+        print("\n--- 📊 Starting SLO Audit ---")
+        try:
+            auditor_agent = get_slo_agent()
+            audit_task = tasks.slo_audit_task(auditor_agent, SLO_CONFIG)
+            crew = Crew(agents=[auditor_agent], tasks=[audit_task])
+            safe_kickoff(crew)
+        except Exception as e:
+            print(f"❌ [ERROR] SLO Audit Crashed: {e}")
+
+    # Schedule
+    schedule.every(60).seconds.do(run_monitor_cycle)
+    schedule.every(5).minutes.do(run_slo_audit)
+
+    print("🚀 Autonomous SRE Crew Started (HOTFIXED)...")
+    
+    if __name__ == "__main__":
+        run_monitor_cycle()
+        while True:
+            schedule.run_pending()
+            time.sleep(1)

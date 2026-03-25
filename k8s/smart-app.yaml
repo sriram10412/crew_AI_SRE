@@ -1,0 +1,102 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: payment-service-code
+  namespace: default
+data:
+  app.py: |
+    from prometheus_client import start_http_server, Counter
+    from http.server import BaseHTTPRequestHandler, HTTPServer
+    import sys
+
+    # DEFINE THE EXACT METRIC THE SRE CREW LOOKS FOR
+    # Metric Name: http_requests_total
+    # Labels: status
+    REQUESTS = Counter('http_requests_total', 'Total HTTP Requests', ['status'])
+
+    class RequestHandler(BaseHTTPRequestHandler):
+        def do_GET(self):
+            # Simulate Bugs based on URL
+            if "/bug" in self.path:
+                REQUESTS.labels(status="500").inc()
+                self.send_response(500)
+                self.wfile.write(b"CRITICAL_DB_FAILURE")
+            elif "/freeze" in self.path:
+                # Simulate Zombie (Timeouts)
+                # We do NOT increment the counter here to simulate a hang, 
+                # OR we increment 503 if we want to catch it via error rate.
+                REQUESTS.labels(status="503").inc()
+                self.send_response(503)
+                self.wfile.write(b"Service Unavailable")
+            else:
+                REQUESTS.labels(status="200").inc()
+                self.send_response(200)
+                self.wfile.write(b"OK")
+
+    if __name__ == "__main__":
+        # Start Metrics Server on 8000
+        print("Starting Metrics on 8000...")
+        start_http_server(8000)
+        
+        # Start App Server on 80
+        print("Starting App on 80...")
+        server = HTTPServer(('0.0.0.0', 80), RequestHandler)
+        server.serve_forever()
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: payment-service
+  namespace: default
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: payment-service
+  template:
+    metadata:
+      labels:
+        app: payment-service
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "8000"
+    spec:
+      containers:
+      - name: app
+        image: python:3.9-slim
+        command: ["/bin/sh", "-c"]
+        args:
+          - |
+            echo "📦 Installing prometheus-client..."
+            pip install prometheus-client
+            echo "🚀 Starting App..."
+            python -u /code/app.py
+        ports:
+        - containerPort: 80
+        - containerPort: 8000
+        volumeMounts:
+        - name: code
+          mountPath: /code
+      volumes:
+      - name: code
+        configMap:
+          name: payment-service-code
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: payment-service
+  namespace: default
+  labels:
+    app: payment-service
+    release: kube-prom-stack
+spec:
+  selector:
+    app: payment-service
+  ports:
+  - port: 80
+    targetPort: 80
+    name: http
+  - port: 8000
+    targetPort: 8000
+    name: metrics
