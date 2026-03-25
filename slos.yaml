@@ -1,0 +1,75 @@
+# ─────────────────────────────────────────────────────────────
+# SLO Definitions — evaluated by SLO Auditor Agent on schedule
+# ─────────────────────────────────────────────────────────────
+
+slos:
+  # ── Availability SLOs ──────────────────────────────────────
+  - service: payments-api
+    name: "Availability SLO"
+    type: availability
+    target: 0.999          # 99.9% uptime
+    window: 30d
+    query: >
+      1 - (
+        sum(rate(http_requests_total{service="payments-api",status=~"5.."}[720h]))
+        /
+        sum(rate(http_requests_total{service="payments-api"}[720h]))
+      )
+
+  - service: auth-service
+    name: "Availability SLO"
+    type: availability
+    target: 0.9999         # 99.99% uptime (critical service)
+    window: 30d
+    query: >
+      1 - (
+        sum(rate(http_requests_total{service="auth-service",status=~"5.."}[720h]))
+        /
+        sum(rate(http_requests_total{service="auth-service"}[720h]))
+      )
+
+  - service: order-service
+    name: "Availability SLO"
+    type: availability
+    target: 0.995          # 99.5% uptime
+    window: 30d
+    query: >
+      1 - (
+        sum(rate(http_requests_total{service="order-service",status=~"5.."}[720h]))
+        /
+        sum(rate(http_requests_total{service="order-service"}[720h]))
+      )
+
+  # ── Latency SLOs ───────────────────────────────────────────
+  - service: payments-api
+    name: "Latency P99 SLO"
+    type: latency
+    target: 0.95           # 95% of requests under 500ms
+    window: 7d
+    query: >
+      histogram_quantile(0.99,
+        rate(http_request_duration_seconds_bucket{service="payments-api"}[168h])
+      ) < 0.5
+
+  - service: auth-service
+    name: "Latency P99 SLO"
+    type: latency
+    target: 0.99           # 99% of requests under 200ms
+    window: 7d
+    query: >
+      histogram_quantile(0.99,
+        rate(http_request_duration_seconds_bucket{service="auth-service"}[168h])
+      ) < 0.2
+
+  # ── Error Rate SLOs ────────────────────────────────────────
+  - service: notification-service
+    name: "Error Rate SLO"
+    type: error_rate
+    target: 0.999          # <0.1% error rate
+    window: 7d
+    query: >
+      1 - (
+        sum(rate(http_requests_total{service="notification-service",status=~"5.."}[168h]))
+        /
+        sum(rate(http_requests_total{service="notification-service"}[168h]))
+      )
