@@ -24,7 +24,7 @@ Core Components:
         - Decides on action: Restart Pod (for stuck processes) or Escalate/Alert (for code bugs).
     - Local LLM (Ollama): A 4B parameter model (e.g., gemma3:4b) running locally or remotely, providing the reasoning capabilities without sending data to the cloud.
 
-### Verify prmoetheus connectivity 
+### Verify prometheus connectivity 
 ```sh
 kubectl run prom-test --image=curlimages/curl -n sre-crew -it --restart=Never --rm -- \
 curl -v http://prometheus-operated.observability.svc.cluster.local:9090/-/ready
